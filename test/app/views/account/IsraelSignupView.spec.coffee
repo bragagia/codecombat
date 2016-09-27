@@ -1,0 +1,34 @@
+IsraelSignupView = require('views/account/IsraelSignupView')
+utils = require 'core/utils'
+
+describe 'IsraelSignupView', ->
+  describe 'initialize()', ->
+    it 'sets state.fatalError to "signed-in" if the user is not anonymous', ->
+      spyOn(me, 'isAnonymous').and.returnValue(false)
+      view = new IsraelSignupView()
+      expect(view.state.get('fatalError')).toBe('signed-in')
+      
+    it 'sets state.fatalError to "missing-input" if the proper query parameters are not provided', ->
+      queryVariables = null
+      spyOn(me, 'isAnonymous').and.returnValue(true)
+      spyOn(utils, 'getQueryVariables').and.callFake(-> queryVariables)
+
+      # no inputs
+      queryVariables = {}
+      expect(new IsraelSignupView().state.get('fatalError')).toBe('missing-input')
+      
+      # id but no email
+      queryVariables = { il_id: '...' }
+      expect(new IsraelSignupView().state.get('fatalError')).toBe('missing-input')
+
+      # email but no id
+      queryVariables = { email: 'test@email.com' }
+      expect(new IsraelSignupView().state.get('fatalError')).toBe('missing-input')
+      
+      # id and email but email is not valid
+      queryVariables = { email: 'notanemail', il_id: '...' }
+      expect(new IsraelSignupView().state.get('fatalError')).toBe('missing-input')
+
+      # valid inputs
+      queryVariables = { email: 'test@email.com', il_id: '...' }
+      expect(new IsraelSignupView().state.get('fatalError')).toBe(null)

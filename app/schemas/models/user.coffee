@@ -346,6 +346,16 @@ _.extend UserSchema.properties,
   role: {type: 'string', enum: ["God", "advisor", "parent", "principal", "student", "superintendent", "teacher", "technology coordinator"]}
   birthday: c.stringDate({title: "Birthday"})
   lastAchievementChecked: c.stringDate({ name: 'Last Achievement Checked' })
+  signupQueryParams: { type: 'object', properties: {
+    il_id: {type: 'string'}
+    first_name: {type: 'string'}
+    last_name: {type: 'string'}
+    email: {type: 'string'}
+    school: {type: 'string'}
+    city: {type: 'string'}
+    state: {type: 'string'}
+    district: {type: 'string'}
+  }}
 
 c.extendBasicProperties UserSchema, 'user'
 

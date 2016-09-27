@@ -215,12 +215,21 @@ if document?.createElement
 module.exports.userAgent = ->
   window.navigator.userAgent
 
-module.exports.getQueryVariable = getQueryVariable = (param, defaultValue) ->
-  query = document.location.search.substring 1
+exports.getDocumentSearchString = ->
+  # moved to a separate function so it can be mocked for testing
+  return document.location.search
+
+module.exports.getQueryVariables = ->
+  query = exports.getDocumentSearchString().substring(1)
   pairs = (pair.split('=') for pair in query.split '&')
-  for pair in pairs when pair[0] is param
-    return {'true': true, 'false': false}[pair[1]] ? decodeURIComponent(pair[1])
-  defaultValue
+  variables = {}
+  for [key, value] in pairs
+    variables[key] = {'true': true, 'false': false}[value] ? decodeURIComponent(value)
+  return variables
+
+module.exports.getQueryVariable = getQueryVariable = (param, defaultValue) ->
+  variables = exports.getQueryVariables()
+  return variables[param] ? defaultValue
 
 module.exports.getSponsoredSubsAmount = getSponsoredSubsAmount = (price=999, subCount=0, personalSub=false) ->
   # 1 100%
