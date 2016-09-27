@@ -41,7 +41,6 @@ init = ->
   Backbone.history.start({ pushState: true })
   handleNormalUrls()
   setUpMoment() # Set up i18n for moment
-  setUpTV4()
 
 module.exports.init = init
 
