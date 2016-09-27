@@ -50,6 +50,7 @@ module.exports = class IsraelSignupView extends RootView
     
     { il_id, email } = @state.get('queryParams')
     
+    # sanity checks
     if not me.isAnonymous()
       @state.set({fatalError: 'signed-in', loading: false})
     
@@ -73,6 +74,7 @@ module.exports = class IsraelSignupView extends RootView
     return _.extend({}, @state.attributes, c)
     
   onChangeName: (e) ->
+    # sync form info with state, but do not re-render
     @state.set({name: $(e.currentTarget).val()}, {silent: true})
     
   onChangePassword: (e) ->
@@ -87,6 +89,8 @@ module.exports = class IsraelSignupView extends RootView
     @$('input').attr('disabled', false)
     
   onSubmitForm: (e) ->
+    
+    # validate form with schema
     e.preventDefault()
     forms.clearFormAlerts(@$el)
     @state.set('formError', null)
@@ -96,6 +100,7 @@ module.exports = class IsraelSignupView extends RootView
       forms.applyErrorsToForm(@$('form'), res.errors)
       return
 
+    # check for name conflicts
     queryParams = @state.get('queryParams')
     @displayFormSubmitting()
     User.checkNameConflicts(data.name)
@@ -106,6 +111,7 @@ module.exports = class IsraelSignupView extends RootView
         forms.setErrorToField(nameField, suggestedNameText)
         throw AbortError
       
+      # Save new user settings, particularly properties handed in
       me.set({
         signupQueryParams: queryParams
         firstName: queryParams.first_name or ''
@@ -114,6 +120,7 @@ module.exports = class IsraelSignupView extends RootView
       return me.save()
         
     .then =>
+      # sign up
       return me.signupWithPassword(
         @state.get('name'),
         queryParams.email,
@@ -121,12 +128,15 @@ module.exports = class IsraelSignupView extends RootView
       )
       
     .then =>
+      # successful signup
       application.router.navigate('/play', { trigger: true })
       
     .catch (e) =>
+      # if we threw the AbortError, the error was handled
       @displayFormStandingBy()
       if e is AbortError
         return
       else
+        # Otherwise, show a generic error
         console.error 'IsraelSignupView form submission Promise error:', e
         @state.set('formError', e.responseJSON?.message or e.message or 'Unknown Error')
