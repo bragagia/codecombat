@@ -21,11 +21,12 @@ module.exports = class CourseInstance extends CocoModel
       data: { userID: userID }
     }
     _.extend options, opts
-    @fetch options
+    jqhr = @fetch options
     if userID is me.id
       unless me.get('courseInstances')
         me.set('courseInstances', [])
       me.get('courseInstances').push(@id)
+    return jqxhr
   
   addMembers: (userIDs, opts) ->
     options = {
@@ -50,8 +51,9 @@ module.exports = class CourseInstance extends CocoModel
       data: { userID: userID }
     }
     _.extend options, opts
-    @fetch(options)
+    jqxhr = @fetch(options)
     me.set('courseInstances', _.without(me.get('courseInstances'), @id)) if userID is me.id
+    return jqxhr
 
   firstLevelURL: ->
     "/play/level/dungeons-of-kithgard?course=#{@get('courseID')}&course-instance=#{@id}"

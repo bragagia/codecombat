@@ -1527,6 +1527,8 @@
   sharing:
     game: "Game"
     webpage: "Webpage"
+    your_students_preview: "Your students click here to preview their creation as their classmates would see it! Unavailable in teacher preview."
+    unavailable: "Link sharing not available in teacher preview."
     share_game: "Share This Game"
     share_web: "Share This Webpage"
     victory_share_prefix: "Share this link to invite your friends & family to"
