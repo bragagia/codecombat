@@ -26,8 +26,6 @@
       span(data-i18n='web_dev.image_gallery_title')
 
   if view.options.level.get('shareable')
-    - i18nName = view.options.level.isType('game-dev') ? 'sharing.game' : 'sharing.webpage'
-
     if view.options.session.isFake()
       button.btn.btn-small.btn-illustrated(
         data-i18n=i18nName

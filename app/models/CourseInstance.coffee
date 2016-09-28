@@ -21,7 +21,7 @@ module.exports = class CourseInstance extends CocoModel
       data: { userID: userID }
     }
     _.extend options, opts
-    jqhr = @fetch options
+    jqxhr = @fetch options
     if userID is me.id
       unless me.get('courseInstances')
         me.set('courseInstances', [])
