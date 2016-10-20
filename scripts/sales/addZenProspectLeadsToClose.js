@@ -42,6 +42,9 @@ getZPContacts((err, emailContactMap) => {
 });
 
 function createCloseLead(zpContact, done) {
+  if (!(zpContact.school_name || zpContact.district)) {
+    log('WARNING: ZP contact has no school or district name! Using organization name instead.', zpContact)
+  }
   const postData = {
     name: zpContact.organization,
     status: 'Contacted',
@@ -64,7 +67,7 @@ function createCloseLead(zpContact, done) {
   }
   if (zpContact.district) {
     postData.custom['demo_nces_district'] = zpContact.district;
-    postData.custom['demo_nces_name'] = zpContact.organization;
+    postData.custom['demo_nces_name'] = zpContact.school_name;
   }
   if (zpContact.nces_district_id) {
     postData.custom['demo_nces_district_id'] = zpContact.nces_district_id;
@@ -147,12 +150,12 @@ function createUpsertCloseLeadFn(zpContact) {
       const data = JSON.parse(body);
       if (data.total_results != 0) return done();
 
-      query = `name:${zpContact.organization}`;
+      query = `name:"${zpContact.organization}"`;
       if (zpContact.nces_school_id) {
         query = `custom.demo_nces_id:"${zpContact.nces_school_id}"`;
       }
       else if (zpContact.nces_district_id) {
-        query = `custom.demo_nces_district_id:"${zpContact.nces_district_id}" custom.demo_nces_id:""`;
+        query = `custom.demo_nces_district_id:"${zpContact.nces_district_id}" custom.demo_nces_id:"" custom.demo_nces_name:""`;
       }
       url = `https://${closeIoApiKey}:X@app.close.io/api/v1/lead/?query=${encodeURIComponent(query)}`;
       request.get(url, (error, response, body) => {
@@ -161,6 +164,10 @@ function createUpsertCloseLeadFn(zpContact) {
         if (data.total_results === 0) {
           console.log(`DEBUG: Creating lead for ${zpContact.organization} ${zpContact.email} nces_district_id=${zpContact.nces_district_id} nces_school_id=${zpContact.nces_school_id}`);
           return createCloseLead(zpContact, done);
+        }
+        else if (data.total_results > 1) {
+          console.error(`ERROR: ${data.total_results} leads found with info from Zen Prospect: email=${zpContact.email}, organization=${zpContact.organization}, school_name=${zpContact.school_name}, district=${zpContact.district}, nces_district_id=${zpContact.nces_district_id}, nces_school_id=${zpContact.nces_school_id}, nces_district_id=${zpContact.nces_district_id}. Final query: ${query}`);
+          return done()
         }
         else {
           const existingLead = data.data[0];
@@ -191,10 +198,15 @@ function getZPContactsPage(contacts, searchQuery, done) {
         phone: contact.phone,
         data: contact
       };
-      // Check custom fields, school_name set means organization_name is district name
+      // console.log("contact email:",contact.email,"contact custom fields:", contact.custom_fields);
       if (contact.custom_fields) {
+        if (contact.custom_fields.district) {
+          newContact.district = contact.custom_fields.district;
+          newContact.organization = contact.custom_fields.district;
+          // console.log(`DEBUG: found contact with district name ${newContact.email} ${contact.custom_fields.district}`);
+        }
         if (contact.custom_fields.school_name) {
-          newContact.district = contact.organization_name;
+          newContact.school_name = contact.custom_fields.school_name;
           newContact.organization = contact.custom_fields.school_name;
           // console.log(`DEBUG: found contact with school name ${newContact.email} ${contact.custom_fields.school_name}`);
         }
@@ -250,7 +262,7 @@ function getZPContacts(done) {
         const emailContactMap = {};
         for (const contact of contacts) {
           if (!contact.organization || !contact.name || !contact.email) {
-            console.log(`DEBUG: missing data for zp contact ${contact.email}:`);
+            console.log(`DEBUG: missing data for zp contact ${contact.email}: {organization: ${contact.organization}, school_name: ${contact.school_name}, district: ${contact.district}, name: ${contact.name}, email: ${contact.email}}`);
             // console.log(JSON.stringify(contact, null, 2));
           }
           else if (!emailContactMap[contact.email]) {

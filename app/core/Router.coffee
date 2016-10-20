@@ -54,6 +54,7 @@ module.exports = class CocoRouter extends Backbone.Router
     'artisans/thang-tasks': go('artisans/ThangTasksView')
     'artisans/level-concepts': go('artisans/LevelConceptMap')
     'artisans/level-guides': go('artisans/LevelGuidesView')
+    'artisans/student-solutions': go('artisans/StudentSolutionsView')
 
     'careers': => window.location.href = 'https://jobs.lever.co/codecombat'
     'Careers': => window.location.href = 'https://jobs.lever.co/codecombat'
@@ -125,10 +126,11 @@ module.exports = class CocoRouter extends Backbone.Router
     'i18n/course/:handle': go('i18n/I18NEditCourseView')
 
     'identify': go('user/IdentifyView')
+    'il-signup': go('account/IsraelSignupView')
 
     'legal': go('LegalView')
 
-    'play(/)': go('play/CampaignView') # extra slash is to get Facebook app to work
+    'play(/)': go('play/CampaignView', { redirectStudents: true, redirectTeachers: true }) # extra slash is to get Facebook app to work
     'play/ladder/:levelID/:leagueType/:leagueID': go('ladder/LadderView')
     'play/ladder/:levelID': go('ladder/LadderView')
     'play/ladder': go('ladder/MainLadderView')

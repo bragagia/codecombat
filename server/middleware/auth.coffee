@@ -12,6 +12,8 @@ authentication = require 'passport'
 sendwithus = require '../sendwithus'
 LevelSession = require '../models/LevelSession'
 config = require '../../server_config'
+oauth = require '../lib/oauth'
+facebook = require '../lib/facebook'
 
 module.exports =
   checkDocumentPermissions: (req, res, next) ->
@@ -63,10 +65,15 @@ module.exports =
     yield req.user.update {activity: activity}
     res.status(200).send(req.user.toObject({req: req}))
 
-  redirectHome: wrap (req, res, next) ->
+  redirectAfterLogin: wrap (req, res) ->
     activity = req.user.trackActivity 'login', 1
     yield req.user.update {activity: activity}
-    res.redirect '/'
+    if req.user.get('role') is 'student'
+      res.redirect '/students'
+    else if req.user.get('role')
+      res.redirect '/teachers/classes'
+    else
+      res.redirect '/play'
 
   loginByGPlus: wrap (req, res, next) ->
     gpID = req.body.gplusID
@@ -154,15 +161,25 @@ module.exports =
     fbID = req.body.facebookID
     fbAT = req.body.facebookAccessToken
     throw new errors.UnprocessableEntity('facebookID and facebookAccessToken required.') unless fbID and fbAT
-
-    url = "https://graph.facebook.com/me?access_token=#{fbAT}"
-    [facebookRes, body] = yield request.getAsync(url, {json: true})
-    idsMatch = fbID is body.id
+    facebookPerson = yield facebook.fetchMe(fbAT)
+    idsMatch = fbID is facebookPerson.id
     throw new errors.UnprocessableEntity('Invalid Facebook Access Token.') unless idsMatch
     user = yield User.findOne({facebookID: fbID})
     throw new errors.NotFound('No user with that Facebook ID') unless user
     req.logInAsync = Promise.promisify(req.logIn)
     yield req.logInAsync(user)
+    next()
+    
+  loginByOAuthProvider: wrap (req, res, next) ->
+    { provider: providerId, accessToken, code } = req.query
+    identity = yield oauth.getIdentityFromOAuth({providerId, accessToken, code})
+    
+    user = yield User.findOne({oAuthIdentities: { $elemMatch: identity }})
+    if not user
+      throw new errors.NotFound('No user with this identity exists')
+    
+    req.loginAsync = Promise.promisify(req.login)
+    yield req.loginAsync user
     next()
     
   spy: wrap (req, res) ->

@@ -26,6 +26,7 @@ sendwithus = require '../sendwithus'
 Prepaid = require '../models/Prepaid'
 UserPollsRecord = require '../models/UserPollsRecord'
 EarnedAchievement = require '../models/EarnedAchievement'
+facebook = require '../lib/facebook'
 
 serverProperties = ['passwordHash', 'emailLower', 'nameLower', 'passwordReset', 'lastIP']
 candidateProperties = [
@@ -61,18 +62,15 @@ UserHandler = class UserHandler extends Handler
   waterfallFunctions: [
     # FB access token checking
     # Check the email is the same as FB reports
+    # TODO: Remove deprecated signups on RequestQuoteView, then these waterfall functions
     (req, user, callback) ->
       fbID = req.query.facebookID
       fbAT = req.query.facebookAccessToken
       return callback(null, req, user) unless fbID and fbAT
-      url = "https://graph.facebook.com/me?access_token=#{fbAT}"
-      request(url, (err, response, body) ->
-        log.warn "Error grabbing FB token: #{err}" if err
-        body = JSON.parse(body)
+      facebook.fetchMe(fbAT).catch(callback).then (body) ->
         emailsMatch = req.body.email is body.email
         return callback(res: 'Invalid Facebook Access Token.', code: 422) unless emailsMatch
         callback(null, req, user)
-      )
 
     # GPlus access token checking
     (req, user, callback) ->
@@ -356,9 +354,9 @@ UserHandler = class UserHandler extends Handler
       stripe.customers.retrieve customerID, (err, customer) =>
         return @sendDatabaseError(res, err) if err
         info = card: customer.sources?.data?[0]
-        findStripeSubscription customerID, subscriptionID: user.get('stripe').subscriptionID, (subscription) =>
+        findStripeSubscription customerID, subscriptionID: user.get('stripe').subscriptionID, (err, subscription) =>
           info.subscription = subscription
-          findStripeSubscription customerID, subscriptionID: user.get('stripe').sponsorSubscriptionID, (subscription) =>
+          findStripeSubscription customerID, subscriptionID: user.get('stripe').sponsorSubscriptionID, (err, subscription) =>
             info.sponsorSubscription = subscription
             @sendSuccess(res, JSON.stringify(info, null, '\t'))
 
@@ -412,7 +410,7 @@ UserHandler = class UserHandler extends Handler
         name: sponsor.get('name')
 
       # Get recipient subscription info
-      findStripeSubscription sponsor.get('stripe')?.customerID, userID: req.user.id, (subscription) =>
+      findStripeSubscription sponsor.get('stripe')?.customerID, userID: req.user.id, (err, subscription) =>
         info.subscription = subscription
         @sendDatabaseError(res, 'No sponsored subscription found') unless info.subscription?
         @sendSuccess(res, info)
@@ -722,6 +720,7 @@ UserHandler = class UserHandler extends Handler
       @sendSuccess res, remark
 
   searchForUser: (req, res) ->
+    return @sendForbiddenError(res) unless req.user?.isAdmin()
     return module.exports.mongoSearchForUser(req,res) unless config.sphinxServer
     mysql = require('mysql');
     connection = mysql.createConnection

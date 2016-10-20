@@ -493,9 +493,14 @@ class CocoContact {
     }
     return postData;
   }
-  getLeadPutData(closeLead) {
-    // console.log('DEBUG: getLeadPutData', closeLead.id);
-    const putData = {};
+  getLeadPutData(closeLead, resetStatus) {
+    // console.log('DEBUG: getLeadPutData', closeLead.id, 'resetStatus: ', !!resetStatus);
+    const putData = resetStatus ? {
+      status: this.getInitialLeadStatus() // So new contacts get auto2 emails
+    } : {};
+    if (resetStatus) {
+      log(`Resetting status of ${closeLead.id} to "${putData.status}"`)
+    }
     const currentCustom = closeLead.custom || {};
     if (!currentCustom['Lead Origin']) {
       putData['custom.Lead Origin'] = this.getLeadOrigin();
@@ -616,11 +621,25 @@ class CocoContact {
 function updateCloseLead(cocoContact, closeLead, done) {
   // console.log('DEBUG: updateCloseLead', cocoContact.email, closeLead.id);
 
-  const putData = cocoContact.getLeadPutData(closeLead);
+  // Check for existing contact
+  let contactIsNew = true;
+  const existingContacts = closeLead.contacts || [];
+  for (const contact of existingContacts) {
+    const emails = contact.emails || [];
+    for (const email of emails) {
+      if (email.email.toLowerCase() === cocoContact.email) {
+        console.log(`DEBUG: contact ${cocoContact.email} already exists on ${closeLead.id}`);
+        contactIsNew = false;
+      }
+    }
+  }
+
+  const putData = cocoContact.getLeadPutData(closeLead, contactIsNew);
   const options = {
     uri: `https://${closeIoApiKey}:X@app.close.io/api/v1/lead/${closeLead.id}/`,
     body: JSON.stringify(putData)
   };
+
   request.put(options, (error, response, body) => {
     if (error) return done(error);
     const result = JSON.parse(body);
@@ -629,16 +648,8 @@ function updateCloseLead(cocoContact, closeLead, done) {
       return done();
     }
 
-    // Check for existing contact
-    const existingContacts = closeLead.contacts || [];
-    for (const contact of existingContacts) {
-      const emails = contact.emails || [];
-      for (const email of emails) {
-        if (email.email.toLowerCase() === cocoContact.email) {
-          // console.log(`DEBUG: contact ${cocoContact.email} already exists on ${closeLead.id}`);
-          return done();
-        }
-      }
+    if (!contactIsNew) {
+      return done();
     }
 
     // Add Close contact
@@ -668,6 +679,7 @@ function saveNewCloseLead(cocoContact, done) {
     const newCloseLead = JSON.parse(body);
     if (newCloseLead.errors || newCloseLead['field-errors']) {
       console.error(`New lead POST error for ${cocoContact.email}`);
+      console.error(`New lead postData: `, JSON.stringify(postData));
       console.error(newCloseLead.errors || newCloseLead['field-errors']);
       return done();
     }
@@ -756,7 +768,7 @@ function createUpdateCloseLeadFn(cocoContact, existingLeads) {
       query = `custom.demo_nces_id:"${nces_school_id}"`;
     }
     else if (nces_district_id) {
-      query = `custom.demo_nces_district_id:"${nces_district_id}" custom.demo_nces_id:""`;
+      query = `custom.demo_nces_district_id:"${nces_district_id}" custom.demo_nces_id:"" custom.demo_nces_name:""`;
     }
     const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/lead/?query=${encodeURIComponent(query)}`;
     request.get(url, (error, response, body) => {
@@ -764,7 +776,7 @@ function createUpdateCloseLeadFn(cocoContact, existingLeads) {
       try {
         const data = JSON.parse(body);
         if (data.total_results > 1) {
-          console.error(`ERROR: ${data.total_results} leads found for ${cocoContact.email} nces_district_id=${nces_district_id} nces_school_id=${nces_school_id}`);
+          console.error(`ERROR: ${data.total_results} leads found with info from demo request: email=${cocoContact.email}, leadName=${cocoContact.leadName}, nces_district_id=${nces_district_id}, nces_school_id=${nces_school_id}. Final query: ${query}`);
           return done();
         }
         if (data.total_results === 1) {
@@ -792,6 +804,7 @@ function addContact(cocoContact, closeLead, done) {
     const newContact = JSON.parse(body);
     if (newContact.errors || newContact['field-errors']) {
       console.error(`New Contact POST error for ${postData.lead_id}`);
+      console.error(`Contact post data: `, JSON.stringify(postData));
       return done();
     }
 
@@ -817,6 +830,8 @@ function addNote(cocoContact, closeLead, currentNotes, done) {
     const result = JSON.parse(body);
     if (result.errors || result['field-errors']) {
       console.error(`New note POST error for ${closeLead.id}`);
+      console.error('Note contents: ', JSON.stringify(notePostData));
+      console.error(result.errors || result['field-errors']);
     }
     return done();
   });

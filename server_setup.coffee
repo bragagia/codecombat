@@ -5,7 +5,7 @@ useragent = require 'express-useragent'
 fs = require 'graceful-fs'
 log = require 'winston'
 compressible = require 'compressible'
-geoip = require 'geoip-lite'
+geoip = require '@basicer/geoip-lite'
 
 database = require './server/commons/database'
 perfmon = require './server/commons/perfmon'
@@ -87,7 +87,7 @@ setupErrorMiddleware = (app) ->
         return
 
       res.status(err.status ? 500).send(error: "Something went wrong!")
-      message = "Express error: #{req.method} #{req.path}: #{err.message}"
+      message = "Express error: #{req.method} #{req.path}: #{err.message} \n #{err.stack}"
       log.error "#{message}, stack: #{err.stack}"
       if global.testing
         console.log "#{message}, stack: #{err.stack}"
@@ -128,6 +128,7 @@ setupPassportMiddleware = (app) ->
   auth.setup()
 
 setupCountryRedirectMiddleware = (app, country="china", countryCode="CN", languageCode="zh", host="cn.codecombat.com") ->
+  hosts = host.split /;/g
   shouldRedirectToCountryServer = (req) ->
     speaksLanguage = _.any req.acceptedLanguages, (language) -> language.indexOf languageCode isnt -1
 
@@ -135,7 +136,9 @@ setupCountryRedirectMiddleware = (app, country="china", countryCode="CN", langua
     reqHost = req.hostname
     reqHost ?= req.host
 
-    unless reqHost.toLowerCase() is host
+    return unless reqHost.indexOf(config.unsafeContentHostname) is -1
+
+    if hosts.indexOf(reqHost.toLowerCase()) is -1
       ip = req.headers['x-forwarded-for'] or req.ip or req.connection.remoteAddress
       ip = ip?.split(/,? /)[0] if ip? # If there are two IP addresses, say because of CloudFlare, we just take the first.
       geo = geoip.lookup(ip)
@@ -149,7 +152,7 @@ setupCountryRedirectMiddleware = (app, country="china", countryCode="CN", langua
 
   app.use (req, res, next) ->
     if shouldRedirectToCountryServer req
-      res.writeHead 302, "Location": 'http://' + host + req.url
+      res.writeHead 302, "Location": 'http://' + hosts[0] + req.url
       res.end()
     else
       next()
@@ -186,16 +189,36 @@ setupRedirectMiddleware = (app) ->
     nameOrID = req.path.split('/')[3]
     res.redirect 301, "/user/#{nameOrID}/profile"
 
+setupSecureMiddleware = (app) ->
+  # Cannot use express request `secure` property in production, due to
+  # cluster setup.
+  isSecure = ->
+    return @secure or @headers['x-forwarded-proto'] is 'https'
+
+  app.use (req, res, next) ->
+    req.isSecure = isSecure
+    next()
+    
 setupPerfMonMiddleware = (app) ->
   app.use perfmon.middleware
+  
+setupAPIDocs = (app) ->
+  # TODO: Move this into routes, so they're consolidated
+  YAML = require 'yamljs'
+  swaggerDoc = YAML.load('./server/swagger.yaml')
+  swaggerUi = require 'swagger-ui-express'
+  app.use('/', swaggerUi.serve)
+  app.use('/api-docs', swaggerUi.setup(swaggerDoc))
 
 exports.setupMiddleware = (app) ->
+  setupSecureMiddleware app
   setupPerfMonMiddleware app
   setupDomainFilterMiddleware app
   setupCountryRedirectMiddleware app, "china", "CN", "zh", config.chinaDomain
   setupCountryRedirectMiddleware app, "brazil", "BR", "pt-BR", config.brazilDomain
   setupMiddlewareToSendOldBrowserWarningWhenPlayersViewLevelDirectly app
   setupExpressMiddleware app
+  setupAPIDocs app # should happen after serving static files, so we serve the right favicon
   setupPassportMiddleware app
   setupOneSecondDelayMiddleware app
   setupRedirectMiddleware app

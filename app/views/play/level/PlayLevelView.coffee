@@ -134,7 +134,7 @@ module.exports = class PlayLevelView extends RootView
 
   load: ->
     @loadStartTime = new Date()
-    levelLoaderOptions = supermodel: @supermodel, levelID: @levelID, sessionID: @sessionID, opponentSessionID: @opponentSessionID, team: @getQueryVariable('team'), observing: @observing, courseID: @courseID
+    levelLoaderOptions = { @supermodel, @levelID, @sessionID, @opponentSessionID, team: @getQueryVariable('team'), @observing, @courseID, @courseInstanceID }
     if me.isSessionless()
       levelLoaderOptions.fakeSessionConfig = {}
     @levelLoader = new LevelLoader levelLoaderOptions
@@ -522,6 +522,9 @@ module.exports = class PlayLevelView extends RootView
 
   onLevelReloadFromData: (e) ->
     isReload = Boolean @world
+    if isReload
+      # Make sure to share any models we loaded that the parent didn't, like hero equipment, in case the parent relodaed
+      e.supermodel.registerModel model for url, model of @supermodel.models when not e.supermodel.models[url]
     @setLevel e.level, e.supermodel
     if isReload
       @scriptManager.setScripts(e.level.get('scripts'))
